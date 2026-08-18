@@ -1,0 +1,26 @@
+# Ansible
+*.retry
+.retry/
+__pycache__/
+*.pyc
+
+# Secrets / credentials
+*.key
+*.pem
+*.crt
+*.csr
+*.token
+admin.conf
+kubeconfig
+*.secret
+
+# Temporary files
+/tmp/
+*.tmp
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

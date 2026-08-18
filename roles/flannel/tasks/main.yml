@@ -1,0 +1,93 @@
+---
+- name: Remove old Flannel manifest
+  ansible.builtin.file:
+    path: /tmp/kube-flannel.yml
+    state: absent
+
+- name: Download official Flannel manifest
+  ansible.builtin.command:
+    cmd: >
+      curl -L
+      https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+      -o /tmp/kube-flannel.yml
+  register: flannel_download
+  changed_when: true
+
+- name: Validate Flannel manifest
+  ansible.builtin.command:
+    cmd: >
+      kubectl
+      --kubeconfig=/etc/kubernetes/admin.conf
+      apply
+      --dry-run=client
+      -f
+      /tmp/kube-flannel.yml
+  register: flannel_validate
+  changed_when: false
+
+- name: Install Flannel CNI
+  ansible.builtin.command:
+    cmd: >
+      kubectl
+      --kubeconfig=/etc/kubernetes/admin.conf
+      apply
+      -f
+      /tmp/kube-flannel.yml
+  register: flannel_apply
+  changed_when: >
+    'created' in flannel_apply.stdout or
+    'configured' in flannel_apply.stdout
+
+- name: Configure Flannel to use Kubernetes interface
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - -n
+      - kube-flannel
+      - patch
+      - daemonset
+      - kube-flannel-ds
+      - --type=json
+      - '-p=[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--iface=eth1"}]'
+  register: flannel_interface
+  changed_when: true
+
+- name: Wait for Flannel DaemonSet to become ready
+  ansible.builtin.command:
+    cmd: >
+      kubectl
+      --kubeconfig=/etc/kubernetes/admin.conf
+      -n kube-flannel
+      rollout status
+      daemonset/kube-flannel-ds
+      --timeout=180s
+  register: flannel_rollout
+  changed_when: false
+
+- name: Wait for all Kubernetes nodes to become Ready
+  ansible.builtin.command:
+    cmd: >
+      kubectl
+      --kubeconfig=/etc/kubernetes/admin.conf
+      wait
+      --for=condition=Ready
+      nodes
+      --all
+      --timeout=180s
+  register: nodes_ready
+  changed_when: false
+
+- name: Display cluster nodes
+  ansible.builtin.command:
+    cmd: >
+      kubectl
+      --kubeconfig=/etc/kubernetes/admin.conf
+      get nodes
+      -o wide
+  register: cluster_nodes
+  changed_when: false
+
+- name: Show cluster nodes
+  ansible.builtin.debug:
+    msg: "{{ cluster_nodes.stdout_lines }}"

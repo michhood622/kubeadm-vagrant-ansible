@@ -1,0 +1,100 @@
+---
+# ============================================================
+# PHASE 1 - COMMON OS CONFIGURATION
+# ============================================================
+
+- name: Prepare Kubernetes nodes
+  hosts: kubernetes
+  become: true
+
+  roles:
+    - common
+    - containerd
+    - kubernetes
+
+
+# ============================================================
+# PHASE 2 - CONTROL PLANE
+# ============================================================
+
+- name: Initialize Kubernetes control plane
+  hosts: control_plane
+  become: true
+
+  roles:
+    - control_plane
+
+
+# ============================================================
+# PHASE 3 - FLANNEL
+# ============================================================
+
+- name: Install Flannel CNI
+  hosts: control_plane
+  become: true
+
+  roles:
+    - flannel
+
+
+# ============================================================
+# PHASE 4 - WORKERS
+# ============================================================
+
+- name: Join Kubernetes workers
+  hosts: workers
+  become: true
+
+  roles:
+    - worker
+
+- name: Configure Kubernetes RBAC
+  hosts: controlplane
+  become: true
+  roles:
+    - rbac
+
+
+- name: Deploy NGINX application
+  hosts: controlplane
+  become: true
+  roles:
+    - nginx_app
+
+# ============================================================
+# PHASE 5 - VALIDATION
+# ============================================================
+
+- name: Validate Kubernetes cluster
+  hosts: control_plane
+  become: true
+
+  tasks:
+
+    - name: Get Kubernetes nodes
+      ansible.builtin.command:
+        cmd: >
+          kubectl
+          --kubeconfig=/etc/kubernetes/admin.conf
+          get nodes
+          -o wide
+      register: kubernetes_nodes
+      changed_when: false
+
+    - name: Display Kubernetes nodes
+      ansible.builtin.debug:
+        msg: "{{ kubernetes_nodes.stdout_lines }}"
+
+    - name: Get all pods
+      ansible.builtin.command:
+        cmd: >
+          kubectl
+          --kubeconfig=/etc/kubernetes/admin.conf
+          get pods -A
+          -o wide
+      register: kubernetes_pods
+      changed_when: false
+
+    - name: Display Kubernetes pods
+      ansible.builtin.debug:
+        msg: "{{ kubernetes_pods.stdout_lines }}"

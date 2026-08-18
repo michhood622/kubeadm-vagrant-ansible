@@ -1,0 +1,87 @@
+---
+- name: Install Python Kubernetes client
+  ansible.builtin.apt:
+    name:
+      - python3-kubernetes
+    state: present
+    update_cache: true
+
+- name: Create nginx-demo namespace
+  kubernetes.core.k8s:
+    kubeconfig: /etc/kubernetes/admin.conf
+    name: nginx-demo
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Create nginx-user ServiceAccount
+  kubernetes.core.k8s:
+    kubeconfig: /etc/kubernetes/admin.conf
+    name: nginx-user
+    namespace: nginx-demo
+    api_version: v1
+    kind: ServiceAccount
+    state: present
+
+- name: Create nginx-deployer Role
+  kubernetes.core.k8s:
+    kubeconfig: /etc/kubernetes/admin.conf
+    name: nginx-deployer
+    namespace: nginx-demo
+    api_version: rbac.authorization.k8s.io/v1
+    kind: Role
+    state: present
+    definition:
+      metadata:
+        name: nginx-deployer
+        namespace: nginx-demo
+      rules:
+        - apiGroups:
+            - ""
+          resources:
+            - pods
+            - services
+            - configmaps
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+
+        - apiGroups:
+            - apps
+          resources:
+            - deployments
+            - replicasets
+          verbs:
+            - get
+            - list
+            - watch
+            - create
+            - update
+            - patch
+            - delete
+
+- name: Create nginx-user RoleBinding
+  kubernetes.core.k8s:
+    kubeconfig: /etc/kubernetes/admin.conf
+    name: nginx-user-binding
+    namespace: nginx-demo
+    api_version: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    state: present
+    definition:
+      metadata:
+        name: nginx-user-binding
+        namespace: nginx-demo
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: Role
+        name: nginx-deployer
+      subjects:
+        - kind: ServiceAccount
+          name: nginx-user
+          namespace: nginx-demo

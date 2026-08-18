@@ -1,0 +1,82 @@
+---
+- name: Create NGINX Deployment
+  kubernetes.core.k8s:
+    kubeconfig: /etc/kubernetes/admin.conf
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: nginx
+        namespace: nginx-demo
+        labels:
+          app: nginx
+      spec:
+        replicas: 2
+        selector:
+          matchLabels:
+            app: nginx
+        template:
+          metadata:
+            labels:
+              app: nginx
+          spec:
+            containers:
+              - name: nginx
+                image: nginx:1.27
+                ports:
+                  - containerPort: 80
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+
+- name: Create NGINX Service
+  kubernetes.core.k8s:
+    kubeconfig: /etc/kubernetes/admin.conf
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: nginx
+        namespace: nginx-demo
+      spec:
+        type: ClusterIP
+        selector:
+          app: nginx
+        ports:
+          - name: http
+            port: 80
+            targetPort: 80
+
+- name: Wait for NGINX deployment
+  kubernetes.core.k8s_info:
+    kubeconfig: /etc/kubernetes/admin.conf
+    api_version: apps/v1
+    kind: Deployment
+    name: nginx
+    namespace: nginx-demo
+  register: nginx_deployment
+  until:
+    - nginx_deployment.resources | length > 0
+    - nginx_deployment.resources[0].status.readyReplicas | default(0) | int == 2
+  retries: 30
+  delay: 5
+
+- name: Get NGINX pods
+  kubernetes.core.k8s_info:
+    kubeconfig: /etc/kubernetes/admin.conf
+    api_version: v1
+    kind: Pod
+    namespace: nginx-demo
+    label_selectors:
+      - app=nginx
+  register: nginx_pods
+
+- name: Display NGINX pods
+  ansible.builtin.debug:
+    msg: "{{ nginx_pods.resources | map(attribute='metadata.name') | list }}"
